@@ -3,6 +3,7 @@ package jindo
 import (
 	"context"
 	"reflect"
+	"time"
 
 	data "github.com/fluid-cloudnative/fluid/api/v1alpha1"
 	"github.com/fluid-cloudnative/fluid/pkg/common"
@@ -16,11 +17,11 @@ import (
 
 // CheckAndUpdateRuntimeStatus checks the related runtime status and updates it.
 func (e *JindoEngine) CheckAndUpdateRuntimeStatus() (ready bool, err error) {
-
+	defer utils.TimeTrack(time.Now(), "JindoEngine.CheckAndUpdateRuntimeStatus", "name", e.name, "namespace", e.namespace)
 	var (
 		masterReady, workerReady bool
 		masterName               string = e.getMasterName()
-		workerName               string = e.getWorkertName()
+		workerName               string = e.getWorkerName()
 		namespace                string = e.namespace
 	)
 
@@ -48,9 +49,9 @@ func (e *JindoEngine) CheckAndUpdateRuntimeStatus() (ready bool, err error) {
 		}
 
 		runtimeToUpdate := runtime.DeepCopy()
-		if reflect.DeepEqual(runtime.Status, runtimeToUpdate.Status) {
-			e.Log.V(1).Info("The runtime is equal after deepcopy")
-		}
+		// if reflect.DeepEqual(runtime.Status, runtimeToUpdate.Status) {
+		// 	e.Log.V(1).Info("The runtime is equal after deepcopy")
+		// }
 
 		states, err := e.queryCacheStatus()
 		if err != nil {
@@ -98,21 +99,22 @@ func (e *JindoEngine) CheckAndUpdateRuntimeStatus() (ready bool, err error) {
 
 		if !reflect.DeepEqual(runtime.Status, runtimeToUpdate.Status) {
 			err = e.Client.Status().Update(context.TODO(), runtimeToUpdate)
-			if err != nil {
-				_ = utils.LoggingErrorExceptConflict(e.Log,
-					err,
-					"Failed to update the runtime",
-					types.NamespacedName{
-						Namespace: e.namespace,
-						Name:      e.name,
-					})
-			}
 		} else {
 			e.Log.Info("Do nothing because the runtime status is not changed.")
 		}
 
 		return err
 	})
+
+	if err != nil {
+		_ = utils.LoggingErrorExceptConflict(e.Log,
+			err,
+			"Failed to update the runtime",
+			types.NamespacedName{
+				Namespace: e.namespace,
+				Name:      e.name,
+			})
+	}
 
 	return
 }

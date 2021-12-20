@@ -3,6 +3,7 @@ package jindo
 import (
 	"context"
 	"reflect"
+	"time"
 
 	datav1alpha1 "github.com/fluid-cloudnative/fluid/api/v1alpha1"
 	"github.com/fluid-cloudnative/fluid/pkg/common"
@@ -28,25 +29,25 @@ func (e *JindoEngine) UpdateDatasetStatus(phase datav1alpha1.DatasetPhase) (err 
 		datasetToUpdate := dataset.DeepCopy()
 		var cond datav1alpha1.DatasetCondition
 
-		switch phase {
-		case datav1alpha1.BoundDatasetPhase:
-			cond = utils.NewDatasetCondition(datav1alpha1.DatasetReady, datav1alpha1.DatasetReadyReason,
-				"The ddc runtime is ready.",
-				corev1.ConditionTrue)
-		case datav1alpha1.FailedDatasetPhase:
-			cond = utils.NewDatasetCondition(datav1alpha1.DatasetReady, datav1alpha1.DatasetReadyReason,
-				"The ddc runtime is not ready.",
-				corev1.ConditionFalse)
-		default:
-			cond = utils.NewDatasetCondition(datav1alpha1.DatasetReady, datav1alpha1.DatasetReadyReason,
-				"The ddc runtime is unknown.",
-				corev1.ConditionFalse)
+		if phase != dataset.Status.Phase {
+			switch phase {
+			case datav1alpha1.BoundDatasetPhase:
+				cond = utils.NewDatasetCondition(datav1alpha1.DatasetReady, datav1alpha1.DatasetReadyReason,
+					"The ddc runtime is ready.",
+					corev1.ConditionTrue)
+			case datav1alpha1.FailedDatasetPhase:
+				cond = utils.NewDatasetCondition(datav1alpha1.DatasetReady, datav1alpha1.DatasetReadyReason,
+					"The ddc runtime is not ready.",
+					corev1.ConditionFalse)
+			default:
+				cond = utils.NewDatasetCondition(datav1alpha1.DatasetReady, datav1alpha1.DatasetReadyReason,
+					"The ddc runtime is unknown.",
+					corev1.ConditionFalse)
+			}
+			datasetToUpdate.Status.Phase = phase
+			datasetToUpdate.Status.Conditions = utils.UpdateDatasetCondition(datasetToUpdate.Status.Conditions,
+				cond)
 		}
-
-		datasetToUpdate.Status.Phase = phase
-		datasetToUpdate.Status.Conditions = utils.UpdateDatasetCondition(datasetToUpdate.Status.Conditions,
-			cond)
-
 		datasetToUpdate.Status.CacheStates = runtime.Status.CacheStates
 
 		e.Log.Info("the dataset status", "status", datasetToUpdate.Status)
@@ -71,6 +72,7 @@ func (e *JindoEngine) UpdateDatasetStatus(phase datav1alpha1.DatasetPhase) (err 
 }
 
 func (e *JindoEngine) UpdateCacheOfDataset() (err error) {
+	defer utils.TimeTrack(time.Now(), "JindoEngine.UpdateCacheOfDataset", "name", e.name, "namespace", e.namespace)
 	// 1. update the runtime status
 	runtime, err := e.getRuntime()
 	if err != nil {

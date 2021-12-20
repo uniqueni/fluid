@@ -58,8 +58,12 @@ func (e *JindoEngine) getMasterName() (dsName string) {
 	return e.name + "-jindofs-master"
 }
 
-func (e *JindoEngine) getWorkertName() (dsName string) {
+func (e *JindoEngine) getWorkerName() (dsName string) {
 	return e.name + "-jindofs-worker"
+}
+
+func (e *JindoEngine) getFuseName() (dsName string) {
+	return e.name + "-jindofs-fuse"
 }
 
 func (e *JindoEngine) getDaemonset(name string, namespace string) (daemonset *appsv1.DaemonSet, err error) {

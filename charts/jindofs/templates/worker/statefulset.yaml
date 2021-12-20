@@ -15,6 +15,15 @@ metadata:
     role: jindofs-worker
     fluid.io/dataset: {{ .Release.Namespace }}-{{ .Release.Name }}
     fluid.io/dataset-placement: {{ .Values.placement }}
+  ownerReferences:
+  {{- if .Values.owner.enabled }}
+  - apiVersion: {{ .Values.owner.apiVersion }}
+    blockOwnerDeletion: {{ .Values.owner.blockOwnerDeletion }}
+    controller: {{ .Values.owner.controller }}
+    kind: {{ .Values.owner.kind }}
+    name: {{ .Values.owner.name }}
+    uid: {{ .Values.owner.uid }}
+  {{- end }}
 spec:
   selector:
     matchLabels:
@@ -23,6 +32,7 @@ spec:
       role: jindofs-worker
   serviceName: {{ template "jindofs.fullname" . }}-worker
   replicas: {{ .Values.worker.replicaCount }}
+  podManagementPolicy: {{ .Values.worker.podManagementPolicy }}
   template:
     metadata:
       labels:
@@ -131,7 +141,7 @@ spec:
               name: volume-localtime
       restartPolicy: Always
       {{- if $notEnableDnsConfig }}
-      dnsPolicy: ClusterFirstWithHostNet
+      dnsPolicy: {{ .Values.useHostNetwork | ternary "ClusterFirstWithHostNet" "ClusterFirst" }}
       {{- else }}
       dnsConfig:
         nameservers:
