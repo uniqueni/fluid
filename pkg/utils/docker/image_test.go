@@ -25,8 +25,9 @@ func TestParseDockerImage(t *testing.T) {
 		image string
 		tag   string
 	}{
-		{"test:abc", "test", "abc"},
+		{"test:35000/test:abc", "test:35000/test", "abc"},
 		{"test", "test", "latest"},
+		{"test:abc", "test", "abc"},
 	}
 	for _, tc := range testCases {
 		image, tag := ParseDockerImage(tc.input)
