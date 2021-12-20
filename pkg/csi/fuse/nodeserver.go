@@ -17,7 +17,9 @@ package csi
 
 import (
 	"fmt"
+	"github.com/fluid-cloudnative/fluid/api/v1alpha1"
 	"github.com/fluid-cloudnative/fluid/pkg/common"
+	"github.com/fluid-cloudnative/fluid/pkg/ddc/base"
 	"github.com/fluid-cloudnative/fluid/pkg/utils"
 	"github.com/fluid-cloudnative/fluid/pkg/utils/kubeclient"
 	"github.com/pkg/errors"
@@ -178,7 +180,30 @@ func (ns *nodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstag
 		return nil, errors.Wrapf(err, "NodeUnstageVolume: can't get namespace and name by volume id %s", req.GetVolumeId())
 	}
 
-	// 2. check if the path is mounted
+	// 2. Check fuse clean policy. If clean policy is set to OnRuntimeDeleted, there is no
+	// need to clean fuse eagerly.
+	runtimeInfo, err := base.GetRuntimeInfo(ns.client, name, namespace)
+	if err != nil {
+		return nil, errors.Wrap(err, "NodeUnstageVolume: can't get fuse clean policy")
+	}
+
+	var shouldCleanFuse bool
+	cleanPolicy := runtimeInfo.GetFuseCleanPolicy()
+	glog.Infof("Using %s clean policy for runtime %s in namespace %s", cleanPolicy, runtimeInfo.GetName(), runtimeInfo.GetNamespace())
+	switch cleanPolicy {
+	case v1alpha1.OnDemandCleanPolicy:
+		shouldCleanFuse = true
+	case v1alpha1.OnRuntimeDeletedCleanPolicy:
+		shouldCleanFuse = false
+	default:
+		return nil, errors.Errorf("Unknown Fuse clean policy: %s", cleanPolicy)
+	}
+
+	if !shouldCleanFuse {
+		return &csi.NodeUnstageVolumeResponse{}, nil
+	}
+
+	// 3. check if the path is mounted
 	inUse, err := checkMountInUse(req.GetVolumeId())
 	if err != nil {
 		return nil, errors.Wrap(err, "NodeUnstageVolume: can't check mount in use")
@@ -187,7 +212,7 @@ func (ns *nodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstag
 		return nil, fmt.Errorf("NodeUnstageVolume: can't stop fuse cause it's in use")
 	}
 
-	// 3. remove label on node.
+	// 4. remove label on node
 	// Once the label is removed, fuse pod on corresponding node will be terminated
 	// since node selector in the fuse daemonSet no longer matches.
 	// TODO: move all the label keys into a util func
@@ -233,10 +258,14 @@ func (ns *nodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVol
 		return nil, errors.Wrapf(err, "NodeStageVolume: can't get node %s", ns.nodeId)
 	}
 
-	_, err = utils.ChangeNodeLabelWithPatchMode(ns.client, node, labelsToModify)
-	if err != nil {
-		glog.Errorf("NodeStageVolume: error when patching labels on node %s: %v", ns.nodeId, err)
-		return nil, errors.Wrapf(err, "NodeStageVolume: error when patching labels on node %s", ns.nodeId)
+	if _, ok := node.Labels[fuseLabelKey]; !ok {
+		_, err = utils.ChangeNodeLabelWithPatchMode(ns.client, node, labelsToModify)
+		if err != nil {
+			glog.Errorf("NodeStageVolume: error when patching labels on node %s: %v", ns.nodeId, err)
+			return nil, errors.Wrapf(err, "NodeStageVolume: error when patching labels on node %s", ns.nodeId)
+		}
+	} else {
+		glog.Info("NodeStageVolume: label already exists on node", "label", fuseLabelKey, "node", node)
 	}
 
 	fluidPath := req.GetVolumeContext()["fluid_path"]

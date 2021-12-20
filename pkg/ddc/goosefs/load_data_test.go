@@ -11,12 +11,12 @@ import (
 	"github.com/brahma-adshonor/gohook"
 	datav1alpha1 "github.com/fluid-cloudnative/fluid/api/v1alpha1"
 	cruntime "github.com/fluid-cloudnative/fluid/pkg/runtime"
+	"github.com/fluid-cloudnative/fluid/pkg/utils/fake"
 	"github.com/fluid-cloudnative/fluid/pkg/utils/helm"
 	"github.com/fluid-cloudnative/fluid/pkg/utils/kubeclient"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -166,6 +166,29 @@ func TestGenerateDataLoadValueFile(t *testing.T) {
 		},
 	}
 
+	dataLoadWithOptions := datav1alpha1.DataLoad{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-dataload",
+			Namespace: "fluid",
+		},
+		Spec: datav1alpha1.DataLoadSpec{
+			Dataset: datav1alpha1.TargetDataset{
+				Name:      "test-dataset",
+				Namespace: "fluid",
+			},
+			Target: []datav1alpha1.TargetPath{
+				{
+					Path:     "/test",
+					Replicas: 1,
+				},
+			},
+			Options: map[string]string{
+				"atomicCache": "true",
+				"expireTime":  "43200000",
+			},
+		},
+	}
+
 	var testCases = []struct {
 		dataLoad       datav1alpha1.DataLoad
 		expectFileName string
@@ -178,11 +201,15 @@ func TestGenerateDataLoadValueFile(t *testing.T) {
 			dataLoad:       dataLoadWithTarget,
 			expectFileName: filepath.Join(os.TempDir(), "fluid-test-dataload-loader-values.yaml"),
 		},
+		{
+			dataLoad:       dataLoadWithOptions,
+			expectFileName: filepath.Join(os.TempDir(), "fluid-test-dataload-loader-values.yaml"),
+		},
 	}
 	for _, test := range testCases {
 		engine := GooseFSEngine{}
-		if fileName, _ := engine.generateDataLoadValueFile(context, test.dataLoad); !strings.Contains(fileName, test.expectFileName) {
-			t.Errorf("fail to generate the dataload value file")
+		if fileName, err := engine.generateDataLoadValueFile(context, test.dataLoad); !strings.Contains(fileName, test.expectFileName) {
+			t.Errorf("fail to generate the dataload value file %v", err)
 		}
 	}
 }

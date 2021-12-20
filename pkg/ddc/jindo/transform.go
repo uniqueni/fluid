@@ -12,6 +12,7 @@ import (
 	"github.com/fluid-cloudnative/fluid/pkg/ddc/base/portallocator"
 	"github.com/fluid-cloudnative/fluid/pkg/utils"
 	"github.com/fluid-cloudnative/fluid/pkg/utils/docker"
+	"github.com/fluid-cloudnative/fluid/pkg/utils/transfromer"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -92,6 +93,7 @@ func (e *JindoEngine) transform(runtime *datav1alpha1.JindoRuntime) (value *Jind
 			Master:            e.transformMasterMountPath(metaPath),
 			WorkersAndClients: e.transformWorkerMountPath(originPath),
 		},
+		Owner: transfromer.GenerateOwnerReferenceFromObject(runtime),
 	}
 	err = e.transformHadoopConfig(runtime, value)
 	if err != nil {
@@ -139,6 +141,7 @@ func (e *JindoEngine) transform(runtime *datav1alpha1.JindoRuntime) (value *Jind
 	if err != nil {
 		return
 	}
+	e.transformNetworkMode(runtime, value)
 	e.transformTolerations(dataset, runtime, value)
 	e.transformResources(runtime, value)
 	e.transformLogConfig(runtime, value)
@@ -492,7 +495,7 @@ func (e *JindoEngine) transformFuseArg(runtime *datav1alpha1.JindoRuntime, datas
 func (e *JindoEngine) getSmartDataConfigs() (image, tag, dnsServer string) {
 	var (
 		defaultImage     = "registry.cn-shanghai.aliyuncs.com/jindofs/smartdata"
-		defaultTag       = "3.7.0"
+		defaultTag       = "3.7.3"
 		defaultDnsServer = "1.1.1.1"
 	)
 
@@ -516,7 +519,7 @@ func (e *JindoEngine) getSmartDataConfigs() (image, tag, dnsServer string) {
 func (e *JindoEngine) parseFuseImage() (image, tag string) {
 	var (
 		defaultImage = "registry.cn-shanghai.aliyuncs.com/jindofs/jindo-fuse"
-		defaultTag   = "3.7.0"
+		defaultTag   = "3.7.3"
 	)
 
 	image = docker.GetImageRepoFromEnv(common.JINDO_FUSE_IMAGE_ENV)
@@ -663,11 +666,22 @@ func (e *JindoEngine) transformLabels(runtime *datav1alpha1.JindoRuntime, value 
 	return nil
 }
 
+func (e *JindoEngine) transformNetworkMode(runtime *datav1alpha1.JindoRuntime, value *Jindo) {
+	// to set hostnetwork
+	switch runtime.Spec.NetworkMode {
+	case datav1alpha1.HostNetworkMode:
+		value.UseHostNetwork = true
+	case datav1alpha1.ContainerNetworkMode:
+		value.UseHostNetwork = false
+	case datav1alpha1.DefaultNetworkMode:
+		value.UseHostNetwork = true
+	}
+}
+
 func (e *JindoEngine) transformPlacementMode(dataset *datav1alpha1.Dataset, value *Jindo) {
 
 	value.PlacementMode = string(dataset.Spec.PlacementMode)
 	if len(value.PlacementMode) == 0 {
 		value.PlacementMode = string(datav1alpha1.ExclusiveMode)
 	}
-
 }

@@ -20,6 +20,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	JindoRuntimeKind = "JindoRuntime"
+)
+
 // JindoCompTemplateSpec is a description of the Jindo commponents
 type JindoCompTemplateSpec struct {
 	// Replicas is the desired number of replicas of the given template.
@@ -108,6 +112,14 @@ type JindoFuseSpec struct {
 	// Any label already existed will be overriden
 	// +optional
 	Labels map[string]string `json:"labels,omitempty"`
+
+	// CleanPolicy decides when to clean JindoFS Fuse pods.
+	// Currently Fluid supports two policies: OnDemand and OnRuntimeDeleted
+	// OnDemand cleans fuse pod once th fuse pod on some node is not needed
+	// OnRuntimeDeleted cleans fuse pod only when the cache runtime is deleted
+	// Defaults to OnRuntimeDeleted
+	// +optional
+	CleanPolicy FuseCleanPolicy `json:"cleanPolicy,omitempty"`
 }
 
 // JindoRuntimeSpec defines the desired state of JindoRuntime
@@ -153,6 +165,11 @@ type JindoRuntimeSpec struct {
 
 	// +optional
 	LogConfig map[string]string `json:"logConfig,omitempty"`
+
+	// Whether to use hostnetwork or not
+	// +kubebuilder:validation:Enum=HostNetwork;"";ContainerNetwork
+	// +optional
+	NetworkMode NetworkMode `json:"networkmode,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -168,6 +185,8 @@ type JindoRuntimeSpec struct {
 // +kubebuilder:printcolumn:name="Desired Fuses",type="integer",JSONPath=`.status.desiredFuseNumberScheduled`,priority=10
 // +kubebuilder:printcolumn:name="Fuse Phase",type="string",JSONPath=`.status.fusePhase`,priority=0
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=`.metadata.creationTimestamp`,priority=0
+// +kubebuilder:resource:scope=Namespaced
+// +kubebuilder:resource:categories={fluid},shortName=jindo
 // +genclient
 
 // JindoRuntime is the Schema for the jindoruntimes API
@@ -180,6 +199,7 @@ type JindoRuntime struct {
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:resource:scope=Namespaced
 
 // JindoRuntimeList contains a list of JindoRuntime
 type JindoRuntimeList struct {
